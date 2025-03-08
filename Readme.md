@@ -35,17 +35,13 @@ python src/train.py [OPTIONS]
 
 #### Common Arguments:
 - `--model_name`: Name of the model file to save/load (default: 'model_weights')
-- `--mode`: Mode of operation: train, predict, or both (default: 'train')
-
 #### Training Arguments:
 - `--epochs`: Number of training epochs (default: 5)
 - `--batch_size`: Training batch size (default: 64)
 - `--train_size`: Fraction of training data to use (default: 0.010)
+- `--test_size`: Fraction of test data to use
 
 #### Prediction Arguments:
-- `--predict_batch_size`: Batch size for predictions (default: 16)
-- `--max_length`: Maximum length of generated summaries (default: 128)
-- `--model_path`: Path to model weights for prediction (default: 'best_model.pt')
 - `--test_file`: Test file path (default: './data/test.txt.src')
 - `--output_file`: Output file for predictions (default: 'predictions.txt')
 
