@@ -50,29 +50,19 @@ python src/train.py [OPTIONS]
 To train the summarization model:
 
 ```bash
-python src/train.py --mode train
+python src/train.py --epochs<int?>
 ```
-
-Key features of the training process:
-- Mixed precision training with gradient scaling
-- Gradient accumulation (4 steps) to effectively increase batch size
-- Automatic checkpointing of the best model based on validation loss
 
 ### Prediction
 
 To generate summaries using a trained model:
 
 ```bash
-python src/train.py --mode predict --model_path your_model.pt
+python src/train.py --test_file<str?> --out_file<str?> 
 ```
 
 ### Training and Prediction in One Run
 
-To train a model and immediately generate predictions:
-
-```bash
-python src/train.py --mode both --model_name my_model
-```
 
 This will:
 1. Train the model and save it as 'my_model.pt'
