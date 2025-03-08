@@ -12,10 +12,26 @@ from summarizer import AbstractiveSummarizer
 from torch.cuda.amp import autocast, GradScaler
 
 
-EPOCHS = 5
-BATCH_SIZE = 64
-MODEL_NAME = 'second_model'
-TRAIN_SIZE = 0.010
+import argparse
+
+parser = argparse.ArgumentParser(description='Training parameters')
+parser.add_argument('--epochs', type=int, default=5, help='Number of training epochs (Default: 5)')
+parser.add_argument('--batch_size', type=int, default=64, help='Training batch size (Default: 64)')
+parser.add_argument('--model_name', type=str, default='model_weights', help='Name of the model (Default: model_weights)')
+parser.add_argument('--train_size', type=float, default=0.010, help='Fraction of training data to use (Default: 0.010)')
+parser.add_argument('--test_file', type=str, default='./data/test.txt.src', help='Path to the test file (Default: ./data/test.txt.src)')
+parser.add_argument('--output_file', type=str, default='predictions.txt', help='Path to the output file (Default: predictions.txt)')
+parser.add_argument('--test_size', type=float, default=1.0, help='Fraction of test data to use (Default: 1.0)')
+
+args = parser.parse_args()
+
+EPOCHS = args.epochs
+BATCH_SIZE = args.batch_size
+MODEL_NAME = args.model_name
+TRAIN_SIZE = args.train_size
+TEST_SIZE = args.test_size
+TEST_FILE = args.test_file
+OUTPUT_FILE = args.output_file
 
 train_files = {'src': './data/train.txt.src', 'tgt': './data/train.txt.tgt'}
 val_files = {'src': './data/val.txt.src', 'tgt': './data/val.txt.tgt'}
@@ -106,29 +122,55 @@ def validate(model, dataloader, criterion, device):
     
     return total_loss / len(dataloader)
 
-def inference(model, article, tokenizer, device, max_length=128):
+
+def batch_inference(model, articles, tokenizer, device, batch_size=16, max_length=128):
     model.eval()
-    with torch.no_grad():
-        src = tokenizer.encode(article, max_length=512, truncation=True)
-        src = torch.tensor(src).unsqueeze(0).to(device)
+    all_summaries = []
+    
+    # Process in batches
+    for i in tqdm(range(0, len(articles), batch_size), desc="Generating summaries"):
+        batch_articles = articles[i:i+batch_size]
         
-        # Initialize with SOS token
-        output_sequence = [tokenizer.bos_token_id]
+        # Encode and pad all articles in the batch
+        encoded_articles = [tokenizer.encode(article, max_length=512, truncation=True) for article in batch_articles]
+        src = pad_sequence(encoded_articles).to(device)
         
-        for _ in range(max_length):
-            tgt = torch.tensor([output_sequence]).to(device)
-            output = model(src, tgt, teacher_forcing_ratio=0.0)
-            next_token = output[0, -1].argmax().item()
+        batch_summaries = []
+        with torch.no_grad():
+            # Initialize with start tokens for each article in batch
+            batch_output_sequences = [[0] for _ in range(len(batch_articles))]
             
-            if next_token == tokenizer.eos_token_id:
-                break
+            # Generate tokens step by step
+            for _ in range(max_length):
+                # Prepare current output sequences
+                tgt_list = [torch.tensor(seq) for seq in batch_output_sequences]
+                tgt = pad_sequence(tgt_list).to(device)
                 
-            output_sequence.append(next_token)
-            
-    return tokenizer.decode(output_sequence)
+                # Get model predictions
+                output = model(src, tgt, teacher_forcing_ratio=0.0)
+                next_tokens = output[:, -1].argmax(dim=1).cpu().tolist()
+                
+                # Check for end tokens and append next tokens
+                finished = [False] * len(batch_articles)
+                for j, token in enumerate(next_tokens):
+                    if hasattr(tokenizer, 'eos_token_id') and token == tokenizer.eos_token_id:
+                        finished[j] = True
+                    else:
+                        batch_output_sequences[j].append(token)
+                
+                # Stop if all sequences have reached EOS
+                if all(finished):
+                    break
+        
+        # Decode all sequences in the batch
+        for seq in batch_output_sequences:
+            all_summaries.append(tokenizer.decode(seq))
+    
+    return all_summaries
+
 
 def main():
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'mps')
     
     vocab_path = './data/vocab.json'
     tokenizer = FastTokenizer()
@@ -193,6 +235,24 @@ def main():
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             torch.save(model.state_dict(), f'{MODEL_NAME}.pt')
+
+
+    
+    if not os.path.exists(TEST_FILE):
+        raise FileNotFoundError(f"Test file not found at {TEST_FILE}")
+    
+    test_articles = open(TEST_FILE).readlines()
+    test_articles = test_articles[:int(len(test_articles) * TEST_SIZE)] #sub setting because gpu resources are contested like Afghanistan
+    batch_size = 64 #inference batch size
+    print(f"Generating summaries in batches of {batch_size}...")
+    
+    predictions = batch_inference(model, test_articles, tokenizer, device, batch_size=batch_size)
+    
+    print(f"Saving predictions to {OUTPUT_FILE}...")
+    with open(OUTPUT_FILE, 'w') as f:
+        f.write('\n'.join(predictions))
+    
+    print(f"Successfully generated {len(predictions)} summaries!")
             
    
 

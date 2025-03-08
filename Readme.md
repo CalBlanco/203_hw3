@@ -16,8 +16,7 @@ This will install all necessary packages including PyTorch, CUDA support librari
 
 The main components of the project are:
 
-- `src/train.py`: Script for training the summarization model
-- `src/predict.py`: Script for generating summaries using a trained model
+- `src/train.py`: Unified script for training the model and generating predictions
 - `src/summarizer.py`: Core model architecture implementation
 - `src/encoder.py`: Encoder component of the seq2seq model
 - `src/decoder.py`: Decoder component with attention mechanism
@@ -26,42 +25,62 @@ The main components of the project are:
 
 ## Usage
 
-### Training
+### Command Line Arguments
 
-To train the summarization model, run:
+The train.py script supports various command line arguments for flexible configuration:
 
 ```bash
-python src/train.py
+python src/train.py [OPTIONS]
 ```
 
-The training script:
-1. Sets up GPU devices (defaults to using GPUs 1, 2, and 3)
-2. Builds or loads a vocabulary from the training data
-3. Creates a seq2seq model with attention
-4. Trains the model for 5 epochs with a batch size of 64
-5. Saves the best model based on validation loss
+#### Common Arguments:
+- `--model_name`: Name of the model file to save/load (default: 'model_weights')
+- `--mode`: Mode of operation: train, predict, or both (default: 'train')
+
+#### Training Arguments:
+- `--epochs`: Number of training epochs (default: 5)
+- `--batch_size`: Training batch size (default: 64)
+- `--train_size`: Fraction of training data to use (default: 0.010)
+
+#### Prediction Arguments:
+- `--predict_batch_size`: Batch size for predictions (default: 16)
+- `--max_length`: Maximum length of generated summaries (default: 128)
+- `--model_path`: Path to model weights for prediction (default: 'best_model.pt')
+- `--test_file`: Test file path (default: './data/test.txt.src')
+- `--output_file`: Output file for predictions (default: 'predictions.txt')
+
+### Training
+
+To train the summarization model:
+
+```bash
+python src/train.py --mode train
+```
 
 Key features of the training process:
 - Mixed precision training with gradient scaling
 - Gradient accumulation (4 steps) to effectively increase batch size
-- Parallel data loading with multiple workers
-- Automatic checkpointing of the best model
+- Automatic checkpointing of the best model based on validation loss
 
 ### Prediction
 
 To generate summaries using a trained model:
 
 ```bash
-python src/predict.py
+python src/train.py --mode predict --model_path your_model.pt
 ```
 
-The prediction script:
-1. Loads the trained model and vocabulary
-2. Processes test articles in batches
-3. Generates summaries using beam search
-4. Saves the predictions to `predictions.txt`
+### Training and Prediction in One Run
 
-The batch inference approach allows for efficient processing of large test sets.
+To train a model and immediately generate predictions:
+
+```bash
+python src/train.py --mode both --model_name my_model
+```
+
+This will:
+1. Train the model and save it as 'my_model.pt'
+2. Use the trained model to generate predictions on the test set
 
 ## Model Architecture
 
